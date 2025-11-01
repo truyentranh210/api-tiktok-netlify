@@ -1,12 +1,11 @@
-// netlify/functions/api.js
 const express = require("express");
 const serverless = require("serverless-http");
 const axios = require("axios");
 
 const app = express();
 
-// =================== /home ===================
-app.get("/home", (req, res) => {
+// =================== HOME ===================
+app.get("/", (req, res) => {
   res.json({
     status: "✅ API TikTok công khai đang hoạt động!",
     usage: {
@@ -32,8 +31,8 @@ app.get("/tiktok", async (req, res) => {
 
     const username = userParam.replace("@", "").split("/").pop();
     const url = `https://www.tiktok.com/@${username}`;
-
     const html = (await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
+
     const jsonMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/);
     if (!jsonMatch) throw new Error("Không tìm thấy dữ liệu người dùng");
 
@@ -71,6 +70,7 @@ app.get("/videotik", async (req, res) => {
     const html = (await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
     const jsonMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/);
     if (!jsonMatch) throw new Error("Không tìm thấy dữ liệu video");
+
     const data = JSON.parse(jsonMatch[1]);
     const item = Object.values(data.ItemModule)[0];
 
