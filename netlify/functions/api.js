@@ -1,7 +1,7 @@
 // netlify/functions/api.js
-import express from "express";
-import serverless from "serverless-http";
-import axios from "axios";
+const express = require("express");
+const serverless = require("serverless-http");
+const axios = require("axios");
 
 const app = express();
 
@@ -18,7 +18,7 @@ app.get("/home", (req, res) => {
     example: {
       user: "https://api-tt.netlify.app/api/tiktok?=@tiktok",
       video:
-        "https://api-tt.netlify.app/api/videotik?=https://www.tiktok.com/@tiktok/video/74568909856",
+        "https://api-tt.netlify.app/api/videotik?=https://www.tiktok.com/@tiktok/video/7419670199934698758",
     },
   });
 });
@@ -30,14 +30,10 @@ app.get("/tiktok", async (req, res) => {
     if (!userParam)
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
-    // Chuẩn hóa username
     const username = userParam.replace("@", "").split("/").pop();
     const url = `https://www.tiktok.com/@${username}`;
 
-    // Gọi HTML TikTok
     const html = (await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
-
-    // Lấy JSON metadata trong HTML
     const jsonMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/);
     if (!jsonMatch) throw new Error("Không tìm thấy dữ liệu người dùng");
 
@@ -74,7 +70,6 @@ app.get("/videotik", async (req, res) => {
 
     const html = (await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
     const jsonMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/);
-
     if (!jsonMatch) throw new Error("Không tìm thấy dữ liệu video");
     const data = JSON.parse(jsonMatch[1]);
     const item = Object.values(data.ItemModule)[0];
@@ -98,5 +93,4 @@ app.get("/videotik", async (req, res) => {
   }
 });
 
-// Export Netlify function
-export const handler = serverless(app);
+module.exports.handler = serverless(app);
