@@ -5,11 +5,11 @@ const axios = require("axios");
 const app = express();
 const router = express.Router();
 
-// ======================= CẤU HÌNH =======================
+// ======== CẤU HÌNH API ==========
 const RAPID_KEY = "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c";
 const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
 
-// ======================= TRANG CHỦ =======================
+// ======== /api/home ==========
 router.get("/home", (req, res) => {
   res.json({
     status: "✅ API TikTok đang hoạt động!",
@@ -27,70 +27,48 @@ router.get("/home", (req, res) => {
   });
 });
 
-// ======================= API NGƯỜI DÙNG =======================
+// ======== /api/tiktok ==========
 router.get("/tiktok", async (req, res) => {
   try {
-    let userParam = req.query.url;
+    const userParam = req.query.url;
     if (!userParam)
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
-    // Nếu người dùng chỉ nhập username thì tự thêm link TikTok
-    if (!userParam.includes("tiktok.com"))
-      userParam = `https://www.tiktok.com/@${userParam.replace("@", "").trim()}`;
+    // Xử lý input: @username hoặc link
+    const username = userParam.replace("@", "").trim().split("/").pop();
 
-    // Dùng proxy để tránh bị chặn khi deploy lên Netlify
-    const proxyUrl = `https://r.jina.ai/${userParam}`;
+    const apiUrl = `https://${RAPID_HOST}/user/info?unique_id=${username}`;
 
-    // Gửi request
-    const response = await axios.get(proxyUrl, {
+    const response = await axios.get(apiUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
+        "x-rapidapi-key": RAPID_KEY,
+        "x-rapidapi-host": RAPID_HOST,
       },
     });
 
-    const html = response.data;
-
-    // Tìm JSON TikTok (trong SIGI_STATE hoặc window['SIGI_STATE'])
-    let match =
-      html.match(/<script id="SIGI_STATE"[^>]*>(.*?)<\/script>/) ||
-      html.match(/window\['SIGI_STATE'\]\s*=\s*(\{.*?\});/);
-
-    if (!match)
+    const user = response.data?.data;
+    if (!user)
       return res.json({
-        error: "❌ Không thể phân tích dữ liệu!",
-        debug: "Không tìm thấy SIGI_STATE trong HTML",
+        error: "❌ Không thể lấy thông tin người dùng!",
+        debug: response.data,
       });
 
-    const raw = JSON.parse(match[1]);
-    const userObj =
-      Object.values(raw.UserModule?.users || {})[0] ||
-      Object.values(raw.UserModule?.suggestedUsers || {})[0];
-
-    if (!userObj)
-      return res.json({
-        error: "❌ Không tìm thấy người dùng TikTok!",
-        debug: "Không có dữ liệu trong UserModule",
-      });
-
-    // Trả kết quả JSON gọn gàng
     res.json({
       status: "success",
       data: {
-        username: userObj.uniqueId,
-        nickname: userObj.nickname,
-        avatar: userObj.avatarLarger,
-        bio: userObj.signature,
-        followers: userObj.stats?.followerCount,
-        following: userObj.stats?.followingCount,
-        likes: userObj.stats?.heartCount,
-        videos: userObj.stats?.videoCount,
-        isVerified: userObj.verified,
+        username: "@" + user.unique_id,
+        nickname: user.nickname,
+        avatar: user.avatar_larger_url,
+        bio: user.signature,
+        followers: user.follower_count,
+        following: user.following_count,
+        likes: user.total_heart_count,
+        videos: user.video_count,
+        isVerified: user.is_verified,
       },
     });
   } catch (err) {
-    console.error("USER_ERROR:", err.message);
+    console.error("USER_ERROR:", err.response?.data || err.message);
     res.status(500).json({
       error: "❌ Không thể lấy thông tin người dùng!",
       debug: err.message,
@@ -98,12 +76,13 @@ router.get("/tiktok", async (req, res) => {
   }
 });
 
-// ======================= API VIDEO =======================
+// ======== /api/videotik ==========
 router.get("/videotik", async (req, res) => {
   try {
     const link = req.query.url;
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
 
+    // Lấy video_id
     const match = link.match(/video\/(\d+)/);
     if (!match) return res.json({ error: "❌ Không thể tách video_id!" });
     const video_id = match[1];
@@ -124,17 +103,15 @@ router.get("/videotik", async (req, res) => {
       response.data?.itemInfo?.itemStruct ||
       null;
 
-    if (!video) {
+    if (!video)
       return res.json({
         error: "❌ Không tìm thấy video!",
         debug: response.data,
       });
-    }
 
     const info = video.author
       ? video
       : response.data.itemInfo?.itemStruct || {};
-
     const author = info.author || {};
 
     res.json({
