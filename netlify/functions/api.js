@@ -11,17 +11,12 @@ const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
 // =================== /api/home ===================
 router.get("/home", (req, res) => {
   res.json({
-    status: "✅ API TikTok đang hoạt động!",
+    status: "✅ API TikTok hoạt động!",
     usage: {
       "/api/tiktok?url=@username":
-        "Lấy thông tin người dùng TikTok (avatar, follower, like, video...)",
+        "→ Lấy thông tin người dùng (avatar, follower, like, video...)",
       "/api/videotik?url=link_video":
-        "Lấy thông tin video TikTok (tiêu đề, hashtag, view, like, link tải...)",
-    },
-    example: {
-      user: "https://api-tt.netlify.app/api/tiktok?url=@tiktok",
-      video:
-        "https://api-tt.netlify.app/api/videotik?url=https://www.tiktok.com/@tiktok/video/6974862859000073478",
+        "→ Lấy thông tin video (tiêu đề, hashtag, view, like, link tải...)",
     },
   });
 });
@@ -30,28 +25,35 @@ router.get("/home", (req, res) => {
 router.get("/tiktok", async (req, res) => {
   try {
     let userParam = req.query.url;
-    if (!userParam)
-      return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
+    if (!userParam) return res.json({ error: "❌ Thiếu @username!" });
 
-    // Chuẩn hóa username
     userParam = userParam.trim().replace("@", "").replace(/\//g, "");
-    const apiUrl = `https://${RAPID_HOST}/user/info_v2?unique_id=${encodeURIComponent(
-      userParam
-    )}`;
 
-    const response = await axios.get(apiUrl, {
-      headers: {
-        "x-rapidapi-key": RAPID_KEY,
-        "x-rapidapi-host": RAPID_HOST,
-      },
-    });
+    const tryEndpoints = [
+      `https://${RAPID_HOST}/user/info_v2?unique_id=${encodeURIComponent(
+        userParam
+      )}`,
+      `https://${RAPID_HOST}/user/info?unique_id=${encodeURIComponent(
+        userParam
+      )}`,
+    ];
 
-    const user = response.data?.data;
-    if (!user)
-      return res.json({
-        error: "❌ Không tìm thấy người dùng!",
-        debug: response.data,
+    let user = null;
+    for (const apiUrl of tryEndpoints) {
+      const response = await axios.get(apiUrl, {
+        headers: {
+          "x-rapidapi-key": RAPID_KEY,
+          "x-rapidapi-host": RAPID_HOST,
+        },
       });
+      if (response.data?.data) {
+        user = response.data.data;
+        break;
+      }
+    }
+
+    if (!user)
+      return res.json({ error: "❌ Không thể lấy thông tin người dùng!" });
 
     res.json({
       status: "success",
@@ -66,8 +68,10 @@ router.get("/tiktok", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: "❌ Không thể lấy thông tin người dùng!" });
+    console.error("USER_ERROR:", err.response?.data || err.message);
+    res
+      .status(500)
+      .json({ error: "❌ Không thể lấy thông tin người dùng!", debug: err.message });
   }
 });
 
@@ -77,7 +81,6 @@ router.get("/videotik", async (req, res) => {
     const link = req.query.url;
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
 
-    // Tách video_id từ link
     const match = link.match(/video\/(\d+)/);
     if (!match) return res.json({ error: "❌ Không thể tách video_id!" });
     const video_id = match[1];
@@ -93,30 +96,54 @@ router.get("/videotik", async (req, res) => {
       },
     });
 
-    const video = response.data?.data;
-    if (!video)
+    // Một số video trả về ở itemInfo.itemStruct thay vì data.data
+    const video =
+      response.data?.data ||
+      response.data?.itemInfo?.itemStruct ||
+      null;
+
+    if (!video) {
       return res.json({
         error: "❌ Không tìm thấy video!",
         debug: response.data,
       });
+    }
+
+    // Dạng itemStruct (trường hợp bạn gặp)
+    const info = video.author
+      ? video
+      : response.data.itemInfo?.itemStruct || {};
+
+    const author = info.author || {};
 
     res.json({
       status: "success",
       data: {
-        title: video.title || "",
-        hashtags: video.hashtags || [],
-        views: video.play_count,
-        likes: video.digg_count,
-        comments: video.comment_count,
-        shares: video.share_count,
-        author: video.author?.unique_id || null,
-        download_url: video.play || null,
-        cover_image: video.cover || null,
+        title: info.desc || info.title || "",
+        author: author.uniqueId || author.nickname || "Unknown",
+        author_nickname: author.nickname || "",
+        hashtags: info.textExtra?.map((h) => h.hashtagName) || [],
+        views: info.stats?.playCount || info.play_count || 0,
+        likes: info.stats?.diggCount || info.digg_count || 0,
+        comments: info.stats?.commentCount || info.comment_count || 0,
+        shares: info.stats?.shareCount || info.share_count || 0,
+        cover_image:
+          info.video?.cover ||
+          info.video?.originCover ||
+          info.cover ||
+          author.avatarLarger ||
+          "",
+        download_url:
+          info.video?.downloadAddr ||
+          info.play ||
+          "",
       },
     });
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    res.status(500).json({ error: "❌ Không thể lấy thông tin video!" });
+    console.error("VIDEO_ERROR:", err.response?.data || err.message);
+    res
+      .status(500)
+      .json({ error: "❌ Không thể lấy thông tin video!", debug: err.message });
   }
 });
 
