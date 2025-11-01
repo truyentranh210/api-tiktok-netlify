@@ -5,11 +5,11 @@ const axios = require("axios");
 const app = express();
 const router = express.Router();
 
-// RapidAPI key cho phần video
+// ======================= CẤU HÌNH =======================
 const RAPID_KEY = "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c";
 const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
 
-// =================== /api/home ===================
+// ======================= TRANG CHỦ =======================
 router.get("/home", (req, res) => {
   res.json({
     status: "✅ API TikTok đang hoạt động!",
@@ -27,30 +27,41 @@ router.get("/home", (req, res) => {
   });
 });
 
-// =================== /api/tiktok (SCRAPER VERSION) ===================
+// ======================= API NGƯỜI DÙNG =======================
 router.get("/tiktok", async (req, res) => {
   try {
     let userParam = req.query.url;
     if (!userParam)
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
-    // Nếu người dùng chỉ nhập username thì tạo link TikTok hợp lệ
+    // Nếu người dùng chỉ nhập username thì tự thêm link TikTok
     if (!userParam.includes("tiktok.com"))
       userParam = `https://www.tiktok.com/@${userParam.replace("@", "").trim()}`;
 
-    // Gửi request trực tiếp đến TikTok
-    const response = await axios.get(userParam, {
+    // Dùng proxy để tránh bị chặn khi deploy lên Netlify
+    const proxyUrl = `https://r.jina.ai/${userParam}`;
+
+    // Gửi request
+    const response = await axios.get(proxyUrl, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
       },
     });
 
-    // Tìm JSON trong <script id="SIGI_STATE">
-    const match = response.data.match(
-      /<script id="SIGI_STATE"[^>]*>(.*?)<\/script>/
-    );
-    if (!match) return res.json({ error: "❌ Không thể phân tích dữ liệu!" });
+    const html = response.data;
+
+    // Tìm JSON TikTok (trong SIGI_STATE hoặc window['SIGI_STATE'])
+    let match =
+      html.match(/<script id="SIGI_STATE"[^>]*>(.*?)<\/script>/) ||
+      html.match(/window\['SIGI_STATE'\]\s*=\s*(\{.*?\});/);
+
+    if (!match)
+      return res.json({
+        error: "❌ Không thể phân tích dữ liệu!",
+        debug: "Không tìm thấy SIGI_STATE trong HTML",
+      });
 
     const raw = JSON.parse(match[1]);
     const userObj =
@@ -58,8 +69,12 @@ router.get("/tiktok", async (req, res) => {
       Object.values(raw.UserModule?.suggestedUsers || {})[0];
 
     if (!userObj)
-      return res.json({ error: "❌ Không tìm thấy người dùng TikTok!" });
+      return res.json({
+        error: "❌ Không tìm thấy người dùng TikTok!",
+        debug: "Không có dữ liệu trong UserModule",
+      });
 
+    // Trả kết quả JSON gọn gàng
     res.json({
       status: "success",
       data: {
@@ -83,7 +98,7 @@ router.get("/tiktok", async (req, res) => {
   }
 });
 
-// =================== /api/videotik ===================
+// ======================= API VIDEO =======================
 router.get("/videotik", async (req, res) => {
   try {
     const link = req.query.url;
@@ -153,5 +168,6 @@ router.get("/videotik", async (req, res) => {
   }
 });
 
+// ==========================================================
 app.use("/api", router);
 module.exports.handler = serverless(app);
