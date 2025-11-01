@@ -5,70 +5,58 @@ const axios = require("axios");
 const app = express();
 const router = express.Router();
 
-// ======== CẤU HÌNH API ==========
-const RAPID_KEY = "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c";
-const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
-
-// ======== /api/home ==========
+// ======================= /api/home =======================
 router.get("/home", (req, res) => {
   res.json({
     status: "✅ API TikTok đang hoạt động!",
     usage: {
       "/api/tiktok?url=@username":
-        "→ Lấy thông tin người dùng (avatar, follower, like, video...)",
+        "→ Lấy thông tin người dùng TikTok (dùng adidaphat.site API)",
       "/api/videotik?url=link_video":
-        "→ Lấy thông tin video (tiêu đề, hashtag, view, like, link tải...)",
-    },
-    example: {
-      user: "https://api-tt.netlify.app/api/tiktok?url=@tiktok",
-      video:
-        "https://api-tt.netlify.app/api/videotik?url=https://www.tiktok.com/@dogfood225/video/7566687492762619154",
+        "→ Lấy thông tin video TikTok (dùng RapidAPI tiktok-scraper2)",
     },
   });
 });
 
-// ======== /api/tiktok ==========
+// ======================= /api/tiktok =======================
 router.get("/tiktok", async (req, res) => {
   try {
     const userParam = req.query.url;
     if (!userParam)
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
-    // Xử lý input: @username hoặc link
+    // Xử lý input để lấy username
     const username = userParam.replace("@", "").trim().split("/").pop();
 
-    const apiUrl = `https://${RAPID_HOST}/user/info?unique_id=${username}`;
+    // Gọi API trung gian adidaphat.site
+    const apiUrl = `https://adidaphat.site/tiktok?type=userinfo&unique_id=${username}`;
+    const response = await axios.get(apiUrl);
 
-    const response = await axios.get(apiUrl, {
-      headers: {
-        "x-rapidapi-key": RAPID_KEY,
-        "x-rapidapi-host": RAPID_HOST,
-      },
-    });
-
-    const user = response.data?.data;
-    if (!user)
+    const data = response.data;
+    if (!data || data.error)
       return res.json({
         error: "❌ Không thể lấy thông tin người dùng!",
-        debug: response.data,
+        debug: data,
       });
+
+    const user = Array.isArray(data) ? data[0] : data;
 
     res.json({
       status: "success",
       data: {
-        username: "@" + user.unique_id,
+        id: user.id,
+        username: user.username,
         nickname: user.nickname,
-        avatar: user.avatar_larger_url,
-        bio: user.signature,
-        followers: user.follower_count,
-        following: user.following_count,
-        likes: user.total_heart_count,
-        videos: user.video_count,
-        isVerified: user.is_verified,
+        avatar: user.avatar,
+        signature: user.signature,
+        followers: user.stats?.followers,
+        following: user.stats?.following,
+        likes: user.stats?.likes,
+        videos: user.stats?.videos,
       },
     });
   } catch (err) {
-    console.error("USER_ERROR:", err.response?.data || err.message);
+    console.error("USER_ERROR:", err.message);
     res.status(500).json({
       error: "❌ Không thể lấy thông tin người dùng!",
       debug: err.message,
@@ -76,25 +64,24 @@ router.get("/tiktok", async (req, res) => {
   }
 });
 
-// ======== /api/videotik ==========
+// ======================= /api/videotik =======================
 router.get("/videotik", async (req, res) => {
   try {
     const link = req.query.url;
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
 
-    // Lấy video_id
     const match = link.match(/video\/(\d+)/);
     if (!match) return res.json({ error: "❌ Không thể tách video_id!" });
     const video_id = match[1];
 
-    const apiUrl = `https://${RAPID_HOST}/video/info_v2?video_url=${encodeURIComponent(
+    const apiUrl = `https://tiktok-scraper2.p.rapidapi.com/video/info_v2?video_url=${encodeURIComponent(
       link
     )}&video_id=${video_id}`;
 
     const response = await axios.get(apiUrl, {
       headers: {
-        "x-rapidapi-key": RAPID_KEY,
-        "x-rapidapi-host": RAPID_HOST,
+        "x-rapidapi-key": "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c",
+        "x-rapidapi-host": "tiktok-scraper2.p.rapidapi.com",
       },
     });
 
@@ -138,10 +125,11 @@ router.get("/videotik", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("VIDEO_ERROR:", err.response?.data || err.message);
-    res
-      .status(500)
-      .json({ error: "❌ Không thể lấy thông tin video!", debug: err.message });
+    console.error("VIDEO_ERROR:", err.message);
+    res.status(500).json({
+      error: "❌ Không thể lấy thông tin video!",
+      debug: err.message,
+    });
   }
 });
 
