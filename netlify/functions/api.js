@@ -5,6 +5,7 @@ const axios = require("axios");
 const app = express();
 const router = express.Router();
 
+// RapidAPI key cho phần video
 const RAPID_KEY = "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c";
 const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
 
@@ -26,7 +27,7 @@ router.get("/home", (req, res) => {
   });
 });
 
-// =================== /api/tiktok (FIXED) ===================
+// =================== /api/tiktok (SCRAPER VERSION) ===================
 router.get("/tiktok", async (req, res) => {
   try {
     let userParam = req.query.url;
@@ -37,40 +38,44 @@ router.get("/tiktok", async (req, res) => {
     if (!userParam.includes("tiktok.com"))
       userParam = `https://www.tiktok.com/@${userParam.replace("@", "").trim()}`;
 
-    const apiUrl = `https://${RAPID_HOST}/user/info_by_url?url=${encodeURIComponent(
-      userParam
-    )}`;
-
-    const response = await axios.get(apiUrl, {
+    // Gửi request trực tiếp đến TikTok
+    const response = await axios.get(userParam, {
       headers: {
-        "x-rapidapi-key": RAPID_KEY,
-        "x-rapidapi-host": RAPID_HOST,
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       },
     });
 
-    const user = response.data?.data;
-    if (!user) {
-      return res.json({
-        error: "❌ Không thể lấy thông tin người dùng!",
-        debug: response.data,
-      });
-    }
+    // Tìm JSON trong <script id="SIGI_STATE">
+    const match = response.data.match(
+      /<script id="SIGI_STATE"[^>]*>(.*?)<\/script>/
+    );
+    if (!match) return res.json({ error: "❌ Không thể phân tích dữ liệu!" });
+
+    const raw = JSON.parse(match[1]);
+    const userObj =
+      Object.values(raw.UserModule?.users || {})[0] ||
+      Object.values(raw.UserModule?.suggestedUsers || {})[0];
+
+    if (!userObj)
+      return res.json({ error: "❌ Không tìm thấy người dùng TikTok!" });
 
     res.json({
       status: "success",
       data: {
-        username: user.username || user.unique_id,
-        nickname: user.nickname,
-        avatar: user.avatar_larger_url || user.avatar,
-        followers: user.follower_count,
-        likes: user.total_heart_count,
-        videos: user.video_count,
-        isVerified: user.is_verified,
-        bio: user.signature,
+        username: userObj.uniqueId,
+        nickname: userObj.nickname,
+        avatar: userObj.avatarLarger,
+        bio: userObj.signature,
+        followers: userObj.stats?.followerCount,
+        following: userObj.stats?.followingCount,
+        likes: userObj.stats?.heartCount,
+        videos: userObj.stats?.videoCount,
+        isVerified: userObj.verified,
       },
     });
   } catch (err) {
-    console.error("USER_ERROR:", err.response?.data || err.message);
+    console.error("USER_ERROR:", err.message);
     res.status(500).json({
       error: "❌ Không thể lấy thông tin người dùng!",
       debug: err.message,
@@ -78,7 +83,7 @@ router.get("/tiktok", async (req, res) => {
   }
 });
 
-// =================== /api/videotik (vẫn giữ như bản trước) ===================
+// =================== /api/videotik ===================
 router.get("/videotik", async (req, res) => {
   try {
     const link = req.query.url;
@@ -142,7 +147,9 @@ router.get("/videotik", async (req, res) => {
     });
   } catch (err) {
     console.error("VIDEO_ERROR:", err.response?.data || err.message);
-    res.status(500).json({ error: "❌ Không thể lấy thông tin video!", debug: err.message });
+    res
+      .status(500)
+      .json({ error: "❌ Không thể lấy thông tin video!", debug: err.message });
   }
 });
 
