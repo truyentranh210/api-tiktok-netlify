@@ -5,7 +5,6 @@ const axios = require("axios");
 const app = express();
 const router = express.Router();
 
-// Thay API key thật của bạn ở đây
 const RAPID_KEY = "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c";
 const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
 
@@ -22,7 +21,7 @@ router.get("/home", (req, res) => {
     example: {
       user: "https://api-tt.netlify.app/api/tiktok?url=@tiktok",
       video:
-        "https://api-tt.netlify.app/api/videotik?url=https://www.tiktok.com/@tiktok/video/7419670199934698758",
+        "https://api-tt.netlify.app/api/videotik?url=https://www.tiktok.com/@tiktok/video/6974862859000073478",
     },
   });
 });
@@ -30,12 +29,15 @@ router.get("/home", (req, res) => {
 // =================== /api/tiktok ===================
 router.get("/tiktok", async (req, res) => {
   try {
-    const userParam = req.query.url;
+    let userParam = req.query.url;
     if (!userParam)
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
-    const username = userParam.replace("@", "").trim();
-    const apiUrl = `https://${RAPID_HOST}/user/info?unique_id=${username}`;
+    // Chuẩn hóa username
+    userParam = userParam.trim().replace("@", "").replace(/\//g, "");
+    const apiUrl = `https://${RAPID_HOST}/user/info_v2?unique_id=${encodeURIComponent(
+      userParam
+    )}`;
 
     const response = await axios.get(apiUrl, {
       headers: {
@@ -44,8 +46,12 @@ router.get("/tiktok", async (req, res) => {
       },
     });
 
-    const user = response.data.data;
-    if (!user) return res.json({ error: "Không tìm thấy người dùng!" });
+    const user = response.data?.data;
+    if (!user)
+      return res.json({
+        error: "❌ Không tìm thấy người dùng!",
+        debug: response.data,
+      });
 
     res.json({
       status: "success",
@@ -60,7 +66,7 @@ router.get("/tiktok", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err.message);
+    console.error(err.response?.data || err.message);
     res.status(500).json({ error: "❌ Không thể lấy thông tin người dùng!" });
   }
 });
@@ -71,7 +77,14 @@ router.get("/videotik", async (req, res) => {
     const link = req.query.url;
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
 
-    const apiUrl = `https://${RAPID_HOST}/video/info_v2?video_url=${encodeURIComponent(link)}`;
+    // Tách video_id từ link
+    const match = link.match(/video\/(\d+)/);
+    if (!match) return res.json({ error: "❌ Không thể tách video_id!" });
+    const video_id = match[1];
+
+    const apiUrl = `https://${RAPID_HOST}/video/info_v2?video_url=${encodeURIComponent(
+      link
+    )}&video_id=${video_id}`;
 
     const response = await axios.get(apiUrl, {
       headers: {
@@ -80,8 +93,12 @@ router.get("/videotik", async (req, res) => {
       },
     });
 
-    const video = response.data.data;
-    if (!video) return res.json({ error: "Không tìm thấy video!" });
+    const video = response.data?.data;
+    if (!video)
+      return res.json({
+        error: "❌ Không tìm thấy video!",
+        debug: response.data,
+      });
 
     res.json({
       status: "success",
@@ -92,17 +109,16 @@ router.get("/videotik", async (req, res) => {
         likes: video.digg_count,
         comments: video.comment_count,
         shares: video.share_count,
-        download_url: video.play,
-        cover_image: video.cover,
         author: video.author?.unique_id || null,
+        download_url: video.play || null,
+        cover_image: video.cover || null,
       },
     });
   } catch (err) {
-    console.error(err.message);
+    console.error(err.response?.data || err.message);
     res.status(500).json({ error: "❌ Không thể lấy thông tin video!" });
   }
 });
 
 app.use("/api", router);
-
 module.exports.handler = serverless(app);
