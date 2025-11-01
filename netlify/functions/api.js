@@ -3,27 +3,25 @@ const serverless = require("serverless-http");
 const axios = require("axios");
 
 const app = express();
+const router = express.Router();
 
-// =================== HOME ===================
-app.get("/", (req, res) => {
+// =================== /api/home ===================
+router.get("/home", (req, res) => {
   res.json({
     status: "✅ API TikTok công khai đang hoạt động!",
     usage: {
-      "/tiktok?=@username":
-        "Lấy thông tin người dùng TikTok (avatar, follower, like, video...)",
-      "/videotik?=link_video":
-        "Lấy thông tin video TikTok (tiêu đề, hashtag, view, like, link tải...)",
+      "/api/tiktok?=@username": "Lấy thông tin người dùng TikTok (avatar, follower, like, video...)",
+      "/api/videotik?=link_video": "Lấy thông tin video TikTok (tiêu đề, hashtag, view, like, link tải...)",
     },
     example: {
       user: "https://api-tt.netlify.app/api/tiktok?=@tiktok",
-      video:
-        "https://api-tt.netlify.app/api/videotik?=https://www.tiktok.com/@tiktok/video/7419670199934698758",
+      video: "https://api-tt.netlify.app/api/videotik?=https://www.tiktok.com/@tiktok/video/7419670199934698758",
     },
   });
 });
 
-// =================== /tiktok ===================
-app.get("/tiktok", async (req, res) => {
+// =================== /api/tiktok ===================
+router.get("/tiktok", async (req, res) => {
   try {
     const userParam = req.query[""];
     if (!userParam)
@@ -61,8 +59,8 @@ app.get("/tiktok", async (req, res) => {
   }
 });
 
-// =================== /videotik ===================
-app.get("/videotik", async (req, res) => {
+// =================== /api/videotik ===================
+router.get("/videotik", async (req, res) => {
   try {
     const link = req.query[""];
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
@@ -92,5 +90,8 @@ app.get("/videotik", async (req, res) => {
     res.status(500).json({ error: "❌ Không thể lấy thông tin video!" });
   }
 });
+
+// Mount router vào prefix /api
+app.use("/api", router);
 
 module.exports.handler = serverless(app);
