@@ -10,12 +10,15 @@ router.get("/home", (req, res) => {
   res.json({
     status: "✅ API TikTok công khai đang hoạt động!",
     usage: {
-      "/api/tiktok?=@username": "Lấy thông tin người dùng TikTok (avatar, follower, like, video...)",
-      "/api/videotik?=link_video": "Lấy thông tin video TikTok (tiêu đề, hashtag, view, like, link tải...)",
+      "/api/tiktok?url=@username":
+        "Lấy thông tin người dùng TikTok (avatar, follower, like, video...)",
+      "/api/videotik?url=link_video":
+        "Lấy thông tin video TikTok (tiêu đề, hashtag, view, like, link tải...)",
     },
     example: {
-      user: "https://api-tt.netlify.app/api/tiktok?=@tiktok",
-      video: "https://api-tt.netlify.app/api/videotik?=https://www.tiktok.com/@tiktok/video/7419670199934698758",
+      user: "https://api-tt.netlify.app/api/tiktok?url=@tiktok",
+      video:
+        "https://api-tt.netlify.app/api/videotik?url=https://www.tiktok.com/@tiktok/video/7419670199934698758",
     },
   });
 });
@@ -23,14 +26,14 @@ router.get("/home", (req, res) => {
 // =================== /api/tiktok ===================
 router.get("/tiktok", async (req, res) => {
   try {
-    const userParam = req.query[""];
+    const userParam = req.query.url; // ✅ sửa ở đây
     if (!userParam)
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
     const username = userParam.replace("@", "").split("/").pop();
     const url = `https://www.tiktok.com/@${username}`;
-    const html = (await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
 
+    const html = (await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
     const jsonMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/);
     if (!jsonMatch) throw new Error("Không tìm thấy dữ liệu người dùng");
 
@@ -62,7 +65,7 @@ router.get("/tiktok", async (req, res) => {
 // =================== /api/videotik ===================
 router.get("/videotik", async (req, res) => {
   try {
-    const link = req.query[""];
+    const link = req.query.url; // ✅ sửa ở đây
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
 
     const html = (await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0" } })).data;
@@ -91,7 +94,7 @@ router.get("/videotik", async (req, res) => {
   }
 });
 
-// Mount router vào prefix /api
+// Mount router vào /api
 app.use("/api", router);
 
 module.exports.handler = serverless(app);
