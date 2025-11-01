@@ -5,6 +5,10 @@ const axios = require("axios");
 const app = express();
 const router = express.Router();
 
+// Thay API key thật của bạn ở đây
+const RAPID_KEY = "c34cb19c93mshb9c6b44976bfac8p1a895ejsnc8507442879c";
+const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
+
 // =================== /api/home ===================
 router.get("/home", (req, res) => {
   res.json({
@@ -31,12 +35,12 @@ router.get("/tiktok", async (req, res) => {
       return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
     const username = userParam.replace("@", "").trim();
-    const apiUrl = `https://tiktok-scraper2.p.rapidapi.com/user/info?unique_id=${username}`;
+    const apiUrl = `https://${RAPID_HOST}/user/info?unique_id=${username}`;
 
     const response = await axios.get(apiUrl, {
       headers: {
-        "x-rapidapi-key": "SIGN-UP-FOR-A-FREE-KEY-AT-rapidapi.com",
-        "x-rapidapi-host": "tiktok-scraper2.p.rapidapi.com",
+        "x-rapidapi-key": RAPID_KEY,
+        "x-rapidapi-host": RAPID_HOST,
       },
     });
 
@@ -67,13 +71,12 @@ router.get("/videotik", async (req, res) => {
     const link = req.query.url;
     if (!link) return res.json({ error: "❌ Thiếu URL video TikTok!" });
 
-    const apiUrl = `https://tiktok-scraper2.p.rapidapi.com/video/info?video_url=${encodeURIComponent(
-      link
-    )}`;
+    const apiUrl = `https://${RAPID_HOST}/video/info_v2?video_url=${encodeURIComponent(link)}`;
+
     const response = await axios.get(apiUrl, {
       headers: {
-        "x-rapidapi-key": "SIGN-UP-FOR-A-FREE-KEY-AT-rapidapi.com",
-        "x-rapidapi-host": "tiktok-scraper2.p.rapidapi.com",
+        "x-rapidapi-key": RAPID_KEY,
+        "x-rapidapi-host": RAPID_HOST,
       },
     });
 
@@ -83,7 +86,7 @@ router.get("/videotik", async (req, res) => {
     res.json({
       status: "success",
       data: {
-        title: video.title,
+        title: video.title || "",
         hashtags: video.hashtags || [],
         views: video.play_count,
         likes: video.digg_count,
@@ -91,6 +94,7 @@ router.get("/videotik", async (req, res) => {
         shares: video.share_count,
         download_url: video.play,
         cover_image: video.cover,
+        author: video.author?.unique_id || null,
       },
     });
   } catch (err) {
@@ -99,7 +103,6 @@ router.get("/videotik", async (req, res) => {
   }
 });
 
-// Mount router vào /api
 app.use("/api", router);
 
 module.exports.handler = serverless(app);
