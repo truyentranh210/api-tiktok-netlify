@@ -11,71 +11,74 @@ const RAPID_HOST = "tiktok-scraper2.p.rapidapi.com";
 // =================== /api/home ===================
 router.get("/home", (req, res) => {
   res.json({
-    status: "✅ API TikTok hoạt động!",
+    status: "✅ API TikTok đang hoạt động!",
     usage: {
       "/api/tiktok?url=@username":
         "→ Lấy thông tin người dùng (avatar, follower, like, video...)",
       "/api/videotik?url=link_video":
         "→ Lấy thông tin video (tiêu đề, hashtag, view, like, link tải...)",
     },
+    example: {
+      user: "https://api-tt.netlify.app/api/tiktok?url=@tiktok",
+      video:
+        "https://api-tt.netlify.app/api/videotik?url=https://www.tiktok.com/@dogfood225/video/7566687492762619154",
+    },
   });
 });
 
-// =================== /api/tiktok ===================
+// =================== /api/tiktok (FIXED) ===================
 router.get("/tiktok", async (req, res) => {
   try {
     let userParam = req.query.url;
-    if (!userParam) return res.json({ error: "❌ Thiếu @username!" });
+    if (!userParam)
+      return res.json({ error: "❌ Thiếu @username hoặc link TikTok!" });
 
-    userParam = userParam.trim().replace("@", "").replace(/\//g, "");
+    // Nếu người dùng chỉ nhập username thì tạo link TikTok hợp lệ
+    if (!userParam.includes("tiktok.com"))
+      userParam = `https://www.tiktok.com/@${userParam.replace("@", "").trim()}`;
 
-    const tryEndpoints = [
-      `https://${RAPID_HOST}/user/info_v2?unique_id=${encodeURIComponent(
-        userParam
-      )}`,
-      `https://${RAPID_HOST}/user/info?unique_id=${encodeURIComponent(
-        userParam
-      )}`,
-    ];
+    const apiUrl = `https://${RAPID_HOST}/user/info_by_url?url=${encodeURIComponent(
+      userParam
+    )}`;
 
-    let user = null;
-    for (const apiUrl of tryEndpoints) {
-      const response = await axios.get(apiUrl, {
-        headers: {
-          "x-rapidapi-key": RAPID_KEY,
-          "x-rapidapi-host": RAPID_HOST,
-        },
+    const response = await axios.get(apiUrl, {
+      headers: {
+        "x-rapidapi-key": RAPID_KEY,
+        "x-rapidapi-host": RAPID_HOST,
+      },
+    });
+
+    const user = response.data?.data;
+    if (!user) {
+      return res.json({
+        error: "❌ Không thể lấy thông tin người dùng!",
+        debug: response.data,
       });
-      if (response.data?.data) {
-        user = response.data.data;
-        break;
-      }
     }
-
-    if (!user)
-      return res.json({ error: "❌ Không thể lấy thông tin người dùng!" });
 
     res.json({
       status: "success",
       data: {
-        username: "@" + user.unique_id,
+        username: user.username || user.unique_id,
         nickname: user.nickname,
-        avatar: user.avatar_larger_url,
+        avatar: user.avatar_larger_url || user.avatar,
         followers: user.follower_count,
         likes: user.total_heart_count,
         videos: user.video_count,
         isVerified: user.is_verified,
+        bio: user.signature,
       },
     });
   } catch (err) {
     console.error("USER_ERROR:", err.response?.data || err.message);
-    res
-      .status(500)
-      .json({ error: "❌ Không thể lấy thông tin người dùng!", debug: err.message });
+    res.status(500).json({
+      error: "❌ Không thể lấy thông tin người dùng!",
+      debug: err.message,
+    });
   }
 });
 
-// =================== /api/videotik ===================
+// =================== /api/videotik (vẫn giữ như bản trước) ===================
 router.get("/videotik", async (req, res) => {
   try {
     const link = req.query.url;
@@ -96,7 +99,6 @@ router.get("/videotik", async (req, res) => {
       },
     });
 
-    // Một số video trả về ở itemInfo.itemStruct thay vì data.data
     const video =
       response.data?.data ||
       response.data?.itemInfo?.itemStruct ||
@@ -109,7 +111,6 @@ router.get("/videotik", async (req, res) => {
       });
     }
 
-    // Dạng itemStruct (trường hợp bạn gặp)
     const info = video.author
       ? video
       : response.data.itemInfo?.itemStruct || {};
@@ -141,9 +142,7 @@ router.get("/videotik", async (req, res) => {
     });
   } catch (err) {
     console.error("VIDEO_ERROR:", err.response?.data || err.message);
-    res
-      .status(500)
-      .json({ error: "❌ Không thể lấy thông tin video!", debug: err.message });
+    res.status(500).json({ error: "❌ Không thể lấy thông tin video!", debug: err.message });
   }
 });
 
